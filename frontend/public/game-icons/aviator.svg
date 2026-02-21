@@ -1,0 +1,27 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#13294b"/>
+      <stop offset="1" stop-color="#0b1730"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff5f6d"/>
+      <stop offset="1" stop-color="#ffc371"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="120" height="120" rx="24" fill="url(#bg)"/>
+
+  <path d="M12 92 Q32 84 44 74 Q56 64 66 50 Q76 36 108 20"
+        fill="none" stroke="url(#line)" stroke-width="5" stroke-linecap="round"/>
+
+  <g transform="translate(73 47) rotate(-26)">
+    <path d="M-18 0 L10 0 L22 -4 L28 0 L22 4 L10 0 L-18 0 Z" fill="#f3f6ff"/>
+    <path d="M-8 0 L-18 -9 L-14 -11 L2 -2 Z" fill="#dbe8ff"/>
+    <path d="M-8 0 L-18 9 L-14 11 L2 2 Z" fill="#dbe8ff"/>
+    <rect x="6" y="-2" width="8" height="4" rx="2" fill="#1a3a67"/>
+  </g>
+
+  <text x="14" y="26" fill="#9bb7e4" font-size="10" font-family="Arial" font-weight="700">AVIATOR</text>
+  <text x="88" y="104" fill="#ffd166" font-size="12" font-family="Arial" font-weight="700">x10</text>
+</svg>

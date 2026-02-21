@@ -1,0 +1,6 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#1f2f52"/>
+  <rect x="18" y="18" width="84" height="84" rx="16" fill="#0f1b34" stroke="#ffd36e" stroke-width="4"/>
+  <text x="60" y="49" text-anchor="middle" fill="#7ee787" font-size="20" font-family="Arial" font-weight="700">BIG</text>
+  <text x="60" y="78" text-anchor="middle" fill="#ff7b72" font-size="20" font-family="Arial" font-weight="700">SMALL</text>
+</svg>
