@@ -50,12 +50,26 @@ CREATE TABLE Games (
     Name NVARCHAR(120) NOT NULL,
     ShortDescription NVARCHAR(400) NOT NULL,
     BannerUrl NVARCHAR(400) NULL,
+    CategoryId UNIQUEIDENTIFIER NOT NULL,
     Status INT NOT NULL DEFAULT 0,
     SortOrder INT NOT NULL DEFAULT 0,
     CreatedAtUtc DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
 );
 
 CREATE INDEX IX_Games_SortOrder ON Games(SortOrder);
+
+CREATE TABLE Categories (
+    Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+    Name NVARCHAR(80) NOT NULL,
+    SortOrder INT NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX IX_Categories_Name ON Categories(Name);
+CREATE INDEX IX_Categories_SortOrder ON Categories(SortOrder);
+
+ALTER TABLE Games
+ADD CONSTRAINT FK_Games_Categories
+FOREIGN KEY (CategoryId) REFERENCES Categories(Id);
 
 CREATE TABLE ContentPages (
     Id UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,

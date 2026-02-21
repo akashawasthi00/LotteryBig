@@ -31,6 +31,7 @@ export default function Games() {
         )}
         {games.map((game) => (
           <div className="card game-card-simple" key={game.id}>
+            <h3 className="game-name">{game.name}</h3>
             <div className={`game-tile game-${getGameSlug(game.name)}`}>
               <img className="game-tile-icon" src={getGameIcon(game.name)} alt={`${game.name} icon`} />
             </div>

@@ -1,31 +1,42 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiFetch } from '../api.js';
-import { getGameIcon, getGameSlug } from '../gameVisuals.js';
+import { getGameSlug } from '../gameVisuals.js';
 
 const BET_PRESETS = [1, 10, 100, 1000];
 const MULTIPLIERS = [1, 5, 10, 20, 50, 100];
+const WINGO_MODES = [
+  { id: '30s', label: 'WinGo 30 Sec', durationSec: 30 },
+  { id: '1m', label: 'WinGo 1 Min', durationSec: 60 },
+  { id: '3m', label: 'WinGo 3 Min', durationSec: 180 },
+  { id: '5m', label: 'WinGo 5 Min', durationSec: 300 }
+];
 
 export default function PlayGame() {
   const { id } = useParams();
   const [game, setGame] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(null);
   const [choice, setChoice] = useState('red');
   const [cashoutAt, setCashoutAt] = useState(1.5);
   const [targetMultiplier, setTargetMultiplier] = useState(2);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [selectedModeId, setSelectedModeId] = useState('30s');
   const [countdown, setCountdown] = useState(30);
   const [period, setPeriod] = useState(() => Math.floor(Date.now() / 30));
   const [roundResults, setRoundResults] = useState([]);
   const [showBetModal, setShowBetModal] = useState(false);
   const [pendingBet, setPendingBet] = useState(null);
   const [liveNumber, setLiveNumber] = useState(() => Math.floor(Math.random() * 10));
-  const [winPopup, setWinPopup] = useState(null);
+  const [outcomePopup, setOutcomePopup] = useState(null);
+  const [walletAction, setWalletAction] = useState(null);
+  const [walletAmount, setWalletAmount] = useState('');
 
   const settledPeriodRef = useRef(null);
 
   useEffect(() => {
+    loadWalletBalance();
     apiFetch(`/api/games/${id}`)
       .then(setGame)
       .catch((err) => setError(err.message));
@@ -33,21 +44,40 @@ export default function PlayGame() {
 
   const gameKey = useMemo(() => (game?.name || '').toLowerCase(), [game]);
   const gameSlug = useMemo(() => getGameSlug(game?.name || ''), [game]);
-  const isWingoLike = gameKey === 'colour trading' || gameKey === 'big small';
+  const isWingoLike = gameKey === 'colour trading' || gameKey === 'big small' || gameKey === 'lottery';
+  const selectedMode = useMemo(
+    () => WINGO_MODES.find((x) => x.id === selectedModeId) || WINGO_MODES[0],
+    [selectedModeId]
+  );
+  const selectedDurationSec = selectedMode.durationSec;
+
+  const loadWalletBalance = () => {
+    apiFetch('/api/wallet/balance')
+      .then((wallet) => setWalletBalance(wallet.balance))
+      .catch(() => {
+        setWalletBalance((prev) => (prev === null ? 0 : prev));
+      });
+  };
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 0) {
-          setPeriod((p) => p + 1);
-          return 30;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const syncRoundClock = () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const elapsedInRound = nowSec % selectedDurationSec;
+      const remaining = (selectedDurationSec - elapsedInRound) % selectedDurationSec;
+      setCountdown(remaining);
+      setPeriod(Math.floor(nowSec / selectedDurationSec));
+    };
+
+    syncRoundClock();
+    const timer = setInterval(syncRoundClock, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [selectedDurationSec]);
+
+  useEffect(() => {
+    setPendingBet(null);
+    settledPeriodRef.current = null;
+  }, [selectedModeId]);
 
   useEffect(() => {
     if (!isWingoLike || countdown <= 0) {
@@ -80,6 +110,14 @@ export default function PlayGame() {
     settleNoBetRound(period);
   }, [countdown, isWingoLike, pendingBet, period]);
 
+  useEffect(() => {
+    if (!result) return;
+    setOutcomePopup({
+      won: Boolean(result.won),
+      amount: result.won ? result.payout : Math.abs(result.profit ?? result.betAmount ?? 0)
+    });
+  }, [result]);
+
   const settlePendingBet = async (roundPeriod) => {
     setIsPlaying(true);
     const bet = pendingBet;
@@ -102,6 +140,9 @@ export default function PlayGame() {
         setResult(res);
         setIsPlaying(false);
         setPendingBet(null);
+        if (typeof res.newBalance === 'number') {
+          setWalletBalance(res.newBalance);
+        }
 
         const number = parseNumberOutcome(res.outcome);
         if (number !== null) {
@@ -110,7 +151,6 @@ export default function PlayGame() {
         }
 
         if (res.won) {
-          setWinPopup({ amount: res.payout });
           playTone(980, 130, 'triangle', 0.05);
           setTimeout(() => playTone(1240, 160, 'triangle', 0.05), 140);
         } else {
@@ -162,10 +202,10 @@ export default function PlayGame() {
       setTimeout(() => {
         setResult(res);
         setIsPlaying(false);
-
-        if (res.won) {
-          setWinPopup({ amount: res.payout });
+        if (typeof res.newBalance === 'number') {
+          setWalletBalance(res.newBalance);
         }
+
       }, 1200);
     } catch (err) {
       setIsPlaying(false);
@@ -185,6 +225,36 @@ export default function PlayGame() {
     await playRound(totalAmount);
   };
 
+  const handleQuickChoice = (nextChoice) => {
+    setChoice(nextChoice);
+    setShowBetModal(true);
+  };
+
+  const submitWalletAction = async () => {
+    if (!walletAction) {
+      return;
+    }
+
+    setError('');
+    const amount = Number(walletAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a valid amount.');
+      return;
+    }
+
+    try {
+      await apiFetch(`/api/wallet/${walletAction}`, {
+        method: 'POST',
+        body: JSON.stringify({ amount, reference: `play-${gameSlug || 'game'}` })
+      });
+      setWalletAction(null);
+      setWalletAmount('');
+      loadWalletBalance();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <div className="page">
       {!game && !error && <div className="card">Loading game...</div>}
@@ -192,9 +262,30 @@ export default function PlayGame() {
 
       {game && (
         <div className="card play-card">
-          <div className={`game-cover game-${gameSlug}`}>
-            <img className="game-logo-img" src={getGameIcon(game.name)} alt={`${game.name} icon`} />
+          <div className="wallet-top-actions">
+            <div className="wallet-top-balance">
+              <div className="wallet-amount-row">
+                <strong>{walletBalance === null ? '--' : `Rs ${walletBalance.toFixed(2)}`}</strong>
+                <button
+                  type="button"
+                  className="wallet-refresh-btn"
+                  onClick={loadWalletBalance}
+                  aria-label="Refresh balance"
+                >
+                  ↻
+                </button>
+              </div>
+              <div className="wallet-label-row">
+                <span className="wallet-badge-icon">💼</span>
+                <span>Wallet balance</span>
+              </div>
+            </div>
+            <div className="wallet-top-buttons">
+              <button className="wallet-action-btn wallet-withdraw-btn" onClick={() => setWalletAction('withdraw')}>Withdraw</button>
+              <button className="wallet-action-btn wallet-deposit-btn" onClick={() => setWalletAction('topup')}>Deposit</button>
+            </div>
           </div>
+
           <h2>{game.name}</h2>
           <p>{game.shortDescription}</p>
 
@@ -204,12 +295,14 @@ export default function PlayGame() {
               countdown={countdown}
               period={period}
               choice={choice}
-              setChoice={setChoice}
+              onSelectChoice={handleQuickChoice}
+              modes={WINGO_MODES}
+              selectedModeId={selectedModeId}
+              onSelectMode={setSelectedModeId}
               roundResults={roundResults}
               pendingBet={pendingBet}
               liveNumber={liveNumber}
               isPlaying={isPlaying}
-              onBet={() => setShowBetModal(true)}
             />
           ) : (
             <StandardGameDesk
@@ -238,20 +331,56 @@ export default function PlayGame() {
 
           {showBetModal && (
             <BetModal
-              title="WinGo 30sec"
+              title={selectedMode.label}
               choice={choice}
               onCancel={() => setShowBetModal(false)}
               onConfirm={handleConfirmBet}
             />
           )}
 
-          {winPopup && (
+          {walletAction && (
             <div className="bet-modal-backdrop">
-              <div className="bet-modal win-popup">
-                <h3>Congratulations</h3>
-                <p>You won</p>
-                <strong>₹{winPopup.amount}</strong>
-                <button className="btn btn-primary" onClick={() => setWinPopup(null)}>OK</button>
+              <div className="bet-modal">
+                <h3>{walletAction === 'topup' ? 'Deposit' : 'Withdraw'}</h3>
+                <p className="bet-selected">Game: {game.name}</p>
+                <div className="bet-section">
+                  <label>Amount</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={walletAmount}
+                    onChange={(e) => setWalletAmount(e.target.value)}
+                    placeholder="Enter amount"
+                  />
+                </div>
+                <div className="bet-bottom-bar">
+                  <span>Reference: play-{gameSlug || 'game'}</span>
+                  <div className="bet-actions">
+                    <button className="btn btn-ghost" onClick={() => setWalletAction(null)}>Cancel</button>
+                    <button className="btn btn-primary" onClick={submitWalletAction}>
+                      Confirm
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {outcomePopup && (
+            <div className="bet-modal-backdrop">
+              <div className={`bet-modal win-popup ${outcomePopup.won ? 'win' : 'loss'}`}>
+                {outcomePopup.won ? (
+                  <>
+                    <h3>Congratulations, you win</h3>
+                    <strong>Rs {Number(outcomePopup.amount || 0).toFixed(2)}/-</strong>
+                  </>
+                ) : (
+                  <>
+                    <h3>You lost</h3>
+                    <strong>Rs {Number(outcomePopup.amount || 0).toFixed(2)}/-</strong>
+                  </>
+                )}
+                <button className="btn btn-primary" onClick={() => setOutcomePopup(null)}>OK</button>
               </div>
             </div>
           )}
@@ -335,17 +464,33 @@ function WingoDesk({
   countdown,
   period,
   choice,
-  setChoice,
+  onSelectChoice,
+  modes,
+  selectedModeId,
+  onSelectMode,
   roundResults,
   pendingBet,
   liveNumber,
-  isPlaying,
-  onBet
+  isPlaying
 }) {
   const isBigSmall = gameKey === 'big small';
+  const isLottery = gameKey === 'lottery';
 
   return (
     <div className="wingo-shell">
+      <div className="wingo-mode-strip">
+        {modes.map((mode) => (
+          <button
+            key={mode.id}
+            type="button"
+            className={`wingo-mode-btn ${selectedModeId === mode.id ? 'active' : ''}`}
+            onClick={() => onSelectMode(mode.id)}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+
       <div className="wingo-topbar">
         <div>
           <span className="wingo-label">Period</span>
@@ -354,7 +499,7 @@ function WingoDesk({
       </div>
 
       <div className={`wingo-center-timer ${countdown <= 5 ? 'danger' : ''}`}>
-        {String(countdown).padStart(2, '0')}
+        {formatCountdown(countdown)}
       </div>
 
       <div className={`live-result num-${liveNumber} ${isPlaying ? 'spinning' : ''}`}>
@@ -364,29 +509,62 @@ function WingoDesk({
 
       {pendingBet && (
         <div className="pending-bet-banner">
-          Bet placed: {pendingBet.choice} • ₹{pendingBet.totalAmount} • Settles at 00s
+          Bet placed: {pendingBet.choice} • ₹{pendingBet.totalAmount} • Settles at 00:00
         </div>
       )}
 
-      {isBigSmall ? (
+      {isLottery ? (
+        <>
+          <div className="wingo-colors two-cols">
+            <button className={`color-btn red ${choice === 'small' ? 'active' : ''}`} onClick={() => onSelectChoice('small')}>
+              Small (0-4)
+            </button>
+            <button className={`color-btn green ${choice === 'big' ? 'active' : ''}`} onClick={() => onSelectChoice('big')}>
+              Big (5-9)
+            </button>
+          </div>
+          <div className="wingo-colors">
+            <button className={`color-btn red ${choice === 'red' ? 'active' : ''}`} onClick={() => onSelectChoice('red')}>
+              Red 2x
+            </button>
+            <button className={`color-btn green ${choice === 'green' ? 'active' : ''}`} onClick={() => onSelectChoice('green')}>
+              Green 2x
+            </button>
+            <button className={`color-btn violet ${choice === 'violet' ? 'active' : ''}`} onClick={() => onSelectChoice('violet')}>
+              Violet 4.5x
+            </button>
+          </div>
+          <div className="wingo-numbers">
+            {Array.from({ length: 10 }).map((_, number) => (
+              <button
+                key={number}
+                className={`number-chip chip-${number} ${choice === String(number) ? 'active' : ''}`}
+                onClick={() => onSelectChoice(String(number))}
+              >
+                {number}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : isBigSmall ? (
         <div className="wingo-colors two-cols">
-          <button className={`color-btn red ${choice === 'small' ? 'active' : ''}`} onClick={() => setChoice('small')}>
+          <button className={`color-btn red ${choice === 'small' ? 'active' : ''}`} onClick={() => onSelectChoice('small')}>
             Small (0-4)
           </button>
-          <button className={`color-btn green ${choice === 'big' ? 'active' : ''}`} onClick={() => setChoice('big')}>
+          <button className={`color-btn green ${choice === 'big' ? 'active' : ''}`} onClick={() => onSelectChoice('big')}>
             Big (5-9)
           </button>
         </div>
       ) : (
         <>
           <div className="wingo-colors">
-            <button className={`color-btn red ${choice === 'red' ? 'active' : ''}`} onClick={() => setChoice('red')}>
+            <button className={`color-btn red ${choice === 'red' ? 'active' : ''}`} onClick={() => onSelectChoice('red')}>
               Red 2x
             </button>
-            <button className={`color-btn green ${choice === 'green' ? 'active' : ''}`} onClick={() => setChoice('green')}>
+            <button className={`color-btn green ${choice === 'green' ? 'active' : ''}`} onClick={() => onSelectChoice('green')}>
               Green 2x
             </button>
-            <button className={`color-btn violet ${choice === 'violet' ? 'active' : ''}`} onClick={() => setChoice('violet')}>
+            <button className={`color-btn violet ${choice === 'violet' ? 'active' : ''}`} onClick={() => onSelectChoice('violet')}>
               Violet 4.5x
             </button>
           </div>
@@ -396,7 +574,7 @@ function WingoDesk({
               <button
                 key={number}
                 className={`number-chip chip-${number} ${choice === String(number) ? 'active' : ''}`}
-                onClick={() => setChoice(String(number))}
+                onClick={() => onSelectChoice(String(number))}
               >
                 {number}
               </button>
@@ -404,10 +582,6 @@ function WingoDesk({
           </div>
         </>
       )}
-
-      <div className="wingo-action-row">
-        <button className="btn btn-primary" onClick={onBet}>Place Bet</button>
-      </div>
 
       <div className="wingo-prev-box">
         <div className="wingo-prev-head">
@@ -513,6 +687,12 @@ function parseNumberOutcome(outcome) {
   const match = /Result number:\s*(\d+)/i.exec(outcome || '');
   if (!match) return null;
   return Number(match[1]);
+}
+
+function formatCountdown(totalSec) {
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 function getNumberColor(number) {

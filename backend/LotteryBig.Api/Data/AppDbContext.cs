@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
     public DbSet<OtpRequest> OtpRequests => Set<OtpRequest>();
     public DbSet<Game> Games => Set<Game>();
+    public DbSet<Category> Categories => Set<Category>();
     public DbSet<ContentPage> ContentPages => Set<ContentPage>();
     public DbSet<Banner> Banners => Set<Banner>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
@@ -53,6 +54,18 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Game>()
             .HasIndex(x => x.SortOrder);
+
+        modelBuilder.Entity<Category>()
+            .HasIndex(x => x.SortOrder);
+
+        modelBuilder.Entity<Category>()
+            .HasIndex(x => x.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<Game>()
+            .HasOne(x => x.Category)
+            .WithMany(x => x.Games)
+            .HasForeignKey(x => x.CategoryId);
 
         modelBuilder.Entity<ContentPage>()
             .HasIndex(x => x.Slug)

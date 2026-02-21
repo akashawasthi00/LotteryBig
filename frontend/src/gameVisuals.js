@@ -1,3 +1,13 @@
+import aviatorIcon from './assets/game-icons/aviator.svg';
+import bigSmallIcon from './assets/game-icons/big-small.svg';
+import boomIcon from './assets/game-icons/boom.svg';
+import colourTradingIcon from './assets/game-icons/colour-trading.svg';
+import defaultIcon from './assets/game-icons/default.svg';
+import limboIcon from './assets/game-icons/limbo.svg';
+import ludoIcon from './assets/game-icons/ludo.svg';
+import pokerIcon from './assets/game-icons/poker.svg';
+import vortexIcon from './assets/game-icons/vortex.svg';
+
 export function getGameSlug(name) {
   return (name || '')
     .toLowerCase()
@@ -13,17 +23,19 @@ export function getGameBadge(name) {
 }
 
 const iconBySlug = {
-  'colour-trading': '/game-icons/colour-trading.svg',
-  'big-small': '/game-icons/big-small.svg',
-  'poker': '/game-icons/poker.svg',
-  'aviator': '/game-icons/aviator.svg',
-  'ludo': '/game-icons/ludo.svg',
-  'boom': '/game-icons/boom.svg',
-  'vortex': '/game-icons/vortex.svg',
-  'limbo': '/game-icons/limbo.svg'
+  'colour-trading': colourTradingIcon,
+  'color-trading': colourTradingIcon,
+  'big-small': bigSmallIcon,
+  'lottery': colourTradingIcon,
+  'poker': pokerIcon,
+  'aviator': aviatorIcon,
+  'ludo': ludoIcon,
+  'boom': boomIcon,
+  'vortex': vortexIcon,
+  'limbo': limboIcon
 };
 
 export function getGameIcon(name) {
   const slug = getGameSlug(name);
-  return iconBySlug[slug] || '/game-icons/default.svg';
+  return iconBySlug[slug] || defaultIcon;
 }

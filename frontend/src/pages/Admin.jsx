@@ -7,7 +7,8 @@ export default function Admin() {
   const [summary, setSummary] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
-  const [game, setGame] = useState({ name: '', shortDescription: '', bannerUrl: '', status: 'Active', sortOrder: 0 });
+  const [categories, setCategories] = useState([]);
+  const [game, setGame] = useState({ name: '', shortDescription: '', bannerUrl: '', status: 'Active', sortOrder: 0, categoryId: '' });
   const [adjust, setAdjust] = useState({ userId: '', amount: 0, reason: 'Manual adjustment' });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -24,6 +25,8 @@ export default function Admin() {
       setSummary(summaryData);
       setDashboard(dashboardData);
       setAuditLogs(auditData);
+      const categoryData = await apiFetch('/api/categories');
+      setCategories(categoryData);
     } catch (err) {
       setError(err.message);
     }
@@ -36,6 +39,10 @@ export default function Admin() {
   const submitGame = async () => {
     setMessage('');
     setError('');
+    if (!game.categoryId) {
+      setError('Select a category before saving the game.');
+      return;
+    }
     try {
       await apiFetch('/api/admin/games', {
         method: 'POST',
@@ -115,6 +122,17 @@ export default function Admin() {
       <div className="card-grid">
         <div className="card">
           <h3>Add Game</h3>
+          <select
+            value={game.categoryId}
+            onChange={(e) => setGame({ ...game, categoryId: e.target.value })}
+          >
+            <option value="">Select category</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
           <input
             placeholder="Name"
             value={game.name}

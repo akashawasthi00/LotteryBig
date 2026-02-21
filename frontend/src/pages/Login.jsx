@@ -1,7 +1,11 @@
 import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFetch, setToken } from '../api.js';
 
 export default function Login() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isSignupPage = location.pathname === '/signup';
   const [mode, setMode] = useState('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +23,7 @@ export default function Login() {
     });
     setToken(res.token);
     setMessage('Logged in.');
+    navigate('/');
   };
 
   const handleRegister = async () => {
@@ -29,6 +34,7 @@ export default function Login() {
     });
     setToken(res.token);
     setMessage('Account created.');
+    navigate('/');
   };
 
   const handleRequestOtp = async () => {
@@ -48,13 +54,14 @@ export default function Login() {
     });
     setToken(res.token);
     setMessage('Logged in via OTP.');
+    navigate('/');
   };
 
   return (
     <div className="page">
       <section className="section-title">
-        <h2>Login / Create Account</h2>
-        <p>Use email + password or OTP sign-in.</p>
+        <h2>{isSignupPage ? 'Create Account' : 'Login / Create Account'}</h2>
+        <p>{isSignupPage ? 'Create your account to start playing.' : 'Use email + password or OTP sign-in.'}</p>
       </section>
 
       {error && <div className="alert">{error}</div>}
@@ -76,10 +83,12 @@ export default function Login() {
           <label>Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <div className="form-actions">
-            <button className="btn btn-primary" onClick={handleEmailLogin}>
-              Login
-            </button>
-            <button className="btn btn-ghost" onClick={handleRegister}>
+            {!isSignupPage && (
+              <button className="btn btn-primary" onClick={handleEmailLogin}>
+                Login
+              </button>
+            )}
+            <button className={`btn ${isSignupPage ? 'btn-primary' : 'btn-ghost'}`} onClick={handleRegister}>
               Create Account
             </button>
           </div>

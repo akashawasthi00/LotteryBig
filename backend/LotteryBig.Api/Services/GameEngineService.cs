@@ -13,23 +13,32 @@ public class GameEngineService
         var key = gameName.Trim().ToLowerInvariant();
         return key switch
         {
-            "colour trading" => ResolveColourTrading(choice),
-            "big small" => ResolveBigSmall(choice),
+            "lottery" => ResolveLottery(choice),
+            "colour trading" => ResolveLottery(choice),
+            "big small" => ResolveLottery(choice),
             "aviator" => ResolveAviator(cashoutAt),
             "limbo" => ResolveLimbo(targetMultiplier),
             "poker" => ResolveBinary(1.95m, "Won hand", "Lost hand"),
             "ludo" => ResolveBinary(1.8m, "Won board", "Lost board"),
             "boom" => ResolveBinary(2.2m, "Boom hit", "Boom miss"),
             "vortex" => ResolveBinary(2.0m, "Vortex hit", "Vortex miss"),
+            "mini games" => ResolveBinary(1.7m, "Mini win", "Mini miss"),
+            "pvc" => ResolveBinary(1.75m, "PVC win", "PVC miss"),
+            "slots" => ResolveBinary(2.4m, "Slots win", "Slots miss"),
+            "popular" => ResolveBinary(1.6m, "Popular win", "Popular miss"),
+            "fishing" => ResolveBinary(2.1m, "Fishing win", "Fishing miss"),
+            "casino" => ResolveBinary(1.9m, "Casino win", "Casino miss"),
+            "sports" => ResolveBinary(1.85m, "Sports win", "Sports miss"),
             _ => ResolveBinary(1.7m, "Round won", "Round lost")
         };
     }
 
-    private static (bool Won, decimal Multiplier, string Outcome) ResolveColourTrading(string? choice)
+    private static (bool Won, decimal Multiplier, string Outcome) ResolveLottery(string? choice)
     {
-        var pick = (choice ?? "red").Trim().ToLowerInvariant();
+        var pick = (choice ?? "big").Trim().ToLowerInvariant();
         var number = Random.Shared.Next(0, 10);
         var colors = GetColors(number);
+        var size = number >= 5 ? "big" : "small";
 
         var won = false;
         var multiplier = 0m;
@@ -38,6 +47,11 @@ public class GameEngineService
         {
             won = pickedNumber == number;
             multiplier = won ? 9m : 0m;
+        }
+        else if (pick is "big" or "small")
+        {
+            won = pick == size;
+            multiplier = won ? 2m : 0m;
         }
         else if (pick is "red" or "green" or "violet")
         {
@@ -48,18 +62,8 @@ public class GameEngineService
             }
         }
 
-        var outcome = $"Result number: {number} ({string.Join("/", colors)})";
+        var outcome = $"Result number: {number} ({size}, {string.Join("/", colors)})";
         return (won, multiplier, outcome);
-    }
-
-    private static (bool Won, decimal Multiplier, string Outcome) ResolveBigSmall(string? choice)
-    {
-        var pick = (choice ?? "big").Trim().ToLowerInvariant();
-        var number = Random.Shared.Next(0, 10);
-        var actual = number >= 5 ? "big" : "small";
-        var won = pick == actual;
-        var multiplier = won ? 2m : 0m;
-        return (won, multiplier, $"Result number: {number} ({actual})");
     }
 
     private static List<string> GetColors(int number)

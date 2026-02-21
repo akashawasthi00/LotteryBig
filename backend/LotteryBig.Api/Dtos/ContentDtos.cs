@@ -5,6 +5,8 @@ public record GameDto(
     string Name,
     string ShortDescription,
     string? BannerUrl,
+    Guid CategoryId,
+    string CategoryName,
     string Status,
     int SortOrder
 );
@@ -13,9 +15,13 @@ public record GameUpsertRequest(
     string Name,
     string ShortDescription,
     string? BannerUrl,
+    Guid CategoryId,
     string Status,
     int SortOrder
 );
+
+public record CategoryDto(Guid Id, string Name, int SortOrder);
+public record CategoryWithGamesDto(Guid Id, string Name, int SortOrder, IEnumerable<GameDto> Games);
 
 public record ContentPageDto(string Slug, string Title, string Body);
 public record ContentUpsertRequest(string Slug, string Title, string Body);

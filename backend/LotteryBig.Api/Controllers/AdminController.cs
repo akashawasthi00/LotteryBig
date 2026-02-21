@@ -105,11 +105,18 @@ public class AdminController : ControllerBase
     [HttpPost("games")]
     public async Task<ActionResult<GameDto>> CreateGame(GameUpsertRequest request)
     {
+        var category = await _db.Categories.FindAsync(request.CategoryId);
+        if (category == null)
+        {
+            return BadRequest("Category not found.");
+        }
+
         var game = new Game
         {
             Name = request.Name,
             ShortDescription = request.ShortDescription,
             BannerUrl = request.BannerUrl,
+            CategoryId = request.CategoryId,
             Status = ParseStatus(request.Status),
             SortOrder = request.SortOrder
         };
@@ -118,27 +125,36 @@ public class AdminController : ControllerBase
         await _db.SaveChangesAsync();
         await _auditService.LogAsync(GetActorId(), "game.create", $"Game {game.Id} created.");
 
+        game.Category = category;
         return MapGame(game);
     }
 
     [HttpPut("games/{id:guid}")]
     public async Task<ActionResult<GameDto>> UpdateGame(Guid id, GameUpsertRequest request)
     {
-        var game = await _db.Games.FindAsync(id);
+        var game = await _db.Games.Include(x => x.Category).FirstOrDefaultAsync(x => x.Id == id);
         if (game == null)
         {
             return NotFound();
         }
 
+        var category = await _db.Categories.FindAsync(request.CategoryId);
+        if (category == null)
+        {
+            return BadRequest("Category not found.");
+        }
+
         game.Name = request.Name;
         game.ShortDescription = request.ShortDescription;
         game.BannerUrl = request.BannerUrl;
+        game.CategoryId = request.CategoryId;
         game.Status = ParseStatus(request.Status);
         game.SortOrder = request.SortOrder;
 
         await _db.SaveChangesAsync();
         await _auditService.LogAsync(GetActorId(), "game.update", $"Game {game.Id} updated.");
 
+        game.Category = category;
         return MapGame(game);
     }
 
@@ -240,6 +256,8 @@ public class AdminController : ControllerBase
             game.Name,
             game.ShortDescription,
             game.BannerUrl,
+            game.CategoryId,
+            game.Category?.Name ?? "",
             game.Status.ToString(),
             game.SortOrder
         );
