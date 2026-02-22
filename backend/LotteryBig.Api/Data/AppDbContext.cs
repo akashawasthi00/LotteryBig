@@ -19,6 +19,8 @@ public class AppDbContext : DbContext
     public DbSet<Banner> Banners => Set<Banner>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<PaymentRecord> PaymentRecords => Set<PaymentRecord>();
+    public DbSet<CrashGameRound> CrashGameRounds => Set<CrashGameRound>();
+    public DbSet<CrashBet> CrashBets => Set<CrashBet>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -51,6 +53,30 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<PaymentRecord>()
             .Property(x => x.Amount)
             .HasPrecision(18, 2);
+
+        modelBuilder.Entity<CrashGameRound>()
+            .Property(x => x.CrashMultiplier)
+            .HasPrecision(10, 2);
+
+        modelBuilder.Entity<CrashBet>()
+            .Property(x => x.BetAmount)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<CrashBet>()
+            .Property(x => x.CashoutMultiplier)
+            .HasPrecision(10, 2);
+
+        modelBuilder.Entity<CrashBet>()
+            .Property(x => x.TargetMultiplier)
+            .HasPrecision(10, 2);
+
+        modelBuilder.Entity<CrashBet>()
+            .Property(x => x.WinAmount)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<CrashGameRound>()
+            .HasIndex(x => x.RoundNumber)
+            .IsUnique();
 
         modelBuilder.Entity<Game>()
             .HasIndex(x => x.SortOrder);

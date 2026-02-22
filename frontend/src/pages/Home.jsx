@@ -33,6 +33,11 @@ export default function Home() {
   function handleCategoryClick(category) {
     setActiveCategoryId(category.id);
 
+    if (category.name.toLowerCase() === 'mini games') {
+      navigate(isLoggedIn ? '/minigames' : '/login');
+      return;
+    }
+
     if (category.games?.length > 0) {
       const gameId = category.games[0].id;
       navigate(isLoggedIn ? `/play/${gameId}` : '/login');

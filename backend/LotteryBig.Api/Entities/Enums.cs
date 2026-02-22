@@ -25,3 +25,17 @@ public enum PaymentStatus
     Paid = 1,
     Failed = 2
 }
+
+public enum CrashRoundStatus
+{
+    Waiting = 0,
+    InProgress = 1,
+    Crashed = 2
+}
+
+public enum CrashBetStatus
+{
+    Active = 0,
+    CashedOut = 1,
+    Lost = 2
+}

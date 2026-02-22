@@ -254,7 +254,7 @@ export default function Wallet() {
               <label>Amount</label>
               <input
                 type="number"
-                placeholder="Enter amount"
+                placeholder="Enter Amount"
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
               />

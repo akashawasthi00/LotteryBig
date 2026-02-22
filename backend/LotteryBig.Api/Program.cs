@@ -3,6 +3,7 @@ using LotteryBig.Api;
 using LotteryBig.Api.Data;
 using LotteryBig.Api.Options;
 using LotteryBig.Api.Services;
+using LotteryBig.Api.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers()
+builder.Services.AddControllersWithViews()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
@@ -54,6 +55,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtOptions.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey))
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs/crash"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization(options =>
@@ -71,6 +86,9 @@ builder.Services.AddScoped<SnsService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<RazorpayService>();
 builder.Services.AddScoped<GameEngineService>();
+builder.Services.AddSingleton<CrashState>();
+builder.Services.AddHostedService<CrashEngineService>();
+builder.Services.AddSignalR();
 
 builder.Services.AddOpenApi();
 
@@ -93,5 +111,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<CrashHub>("/hubs/crash");
 
 app.Run();

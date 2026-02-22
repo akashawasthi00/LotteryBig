@@ -7,6 +7,9 @@ export default function Admin() {
   const [summary, setSummary] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [crashSummary, setCrashSummary] = useState(null);
+  const [crashRounds, setCrashRounds] = useState([]);
+  const [games, setGames] = useState([]);
   const [categories, setCategories] = useState([]);
   const [game, setGame] = useState({ name: '', shortDescription: '', bannerUrl: '', status: 'Active', sortOrder: 0, categoryId: '' });
   const [adjust, setAdjust] = useState({ userId: '', amount: 0, reason: 'Manual adjustment' });
@@ -25,6 +28,14 @@ export default function Admin() {
       setSummary(summaryData);
       setDashboard(dashboardData);
       setAuditLogs(auditData);
+      const [crashSummaryData, crashRoundsData] = await Promise.all([
+        apiFetch('/api/admin/crash/summary'),
+        apiFetch('/api/admin/crash/rounds')
+      ]);
+      setCrashSummary(crashSummaryData);
+      setCrashRounds(crashRoundsData);
+      const allGames = await apiFetch('/api/admin/games');
+      setGames(allGames);
       const categoryData = await apiFetch('/api/categories');
       setCategories(categoryData);
     } catch (err) {
@@ -49,6 +60,35 @@ export default function Admin() {
         body: JSON.stringify(game)
       });
       setMessage('Game added.');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const toggleCrashGame = async () => {
+    setMessage('');
+    setError('');
+    const crashGame = games.find((g) => g.name === 'Crash Multiplier');
+    if (!crashGame) {
+      setError('Crash Multiplier game not found.');
+      return;
+    }
+
+    const nextStatus = crashGame.status === 'Active' ? 'Hidden' : 'Active';
+    try {
+      await apiFetch(`/api/admin/games/${crashGame.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: crashGame.name,
+          shortDescription: crashGame.shortDescription,
+          bannerUrl: crashGame.bannerUrl,
+          categoryId: crashGame.categoryId,
+          status: nextStatus,
+          sortOrder: crashGame.sortOrder
+        })
+      });
+      setMessage(`Crash game ${nextStatus === 'Active' ? 'enabled' : 'disabled'}.`);
+      load();
     } catch (err) {
       setError(err.message);
     }
@@ -232,6 +272,59 @@ export default function Admin() {
           ))}
         </div>
       </div>
+
+      {crashSummary && (
+        <div className="card">
+          <h3>Crash Game Summary</h3>
+          <div className="card-grid">
+            <div className="card">
+              <h4>Total Wagered</h4>
+              <p>{crashSummary.totalWagered}</p>
+            </div>
+            <div className="card">
+              <h4>Total Paid</h4>
+              <p>{crashSummary.totalPaid}</p>
+            </div>
+            <div className="card">
+              <h4>Profit / Loss</h4>
+              <p>{crashSummary.profit}</p>
+            </div>
+            <div className="card">
+              <h4>Crash Game Status</h4>
+              <p>{games.find((g) => g.name === 'Crash Multiplier')?.status || 'Unknown'}</p>
+              <button className="btn btn-ghost" onClick={toggleCrashGame}>
+                Toggle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {crashRounds.length > 0 && (
+        <div className="card">
+          <h3>Crash Round History</h3>
+          <div className="table">
+            <div className="table-row table-head">
+              <span>Round</span>
+              <span>Crash</span>
+              <span>Bets</span>
+              <span>Wagered</span>
+              <span>Paid</span>
+              <span>Ended</span>
+            </div>
+            {crashRounds.map((round) => (
+              <div className="table-row" key={round.roundId}>
+                <span>#{round.roundNumber}</span>
+                <span>{round.crashMultiplier.toFixed(2)}x</span>
+                <span>{round.betsCount}</span>
+                <span>{round.totalWagered}</span>
+                <span>{round.totalPaid}</span>
+                <span>{round.endedAtUtc ? new Date(round.endedAtUtc).toLocaleString() : '-'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

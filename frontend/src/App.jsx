@@ -6,6 +6,8 @@ import Wallet from './pages/Wallet.jsx';
 import Login from './pages/Login.jsx';
 import PlayGame from './pages/PlayGame.jsx';
 import Support from './pages/Support.jsx';
+import MiniGames from './pages/MiniGames.jsx';
+import CrashGame from './pages/CrashGame.jsx';
 import { getToken } from './api.js';
 
 function RequireAuth({ children }) {
@@ -20,6 +22,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/games" element={<Navigate to="/" replace />} />
+          <Route path="/minigames" element={<RequireAuth><MiniGames /></RequireAuth>} />
+          <Route path="/minigames/crash" element={<RequireAuth><CrashGame /></RequireAuth>} />
           <Route path="/play/:id" element={<RequireAuth><PlayGame /></RequireAuth>} />
           <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
           <Route path="/login" element={<Login />} />

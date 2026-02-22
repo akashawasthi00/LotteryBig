@@ -46,6 +46,19 @@ export function getUserRole() {
   );
 }
 
+export function getUserId() {
+  const token = getToken();
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return null;
+  return (
+    payload.sub ||
+    payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'] ||
+    payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/nameidentifier'] ||
+    null
+  );
+}
+
 export function isAdmin() {
   return getUserRole() === 'admin';
 }

@@ -158,6 +158,16 @@ public class AdminController : ControllerBase
         return MapGame(game);
     }
 
+    [HttpGet("games")]
+    public async Task<ActionResult<IEnumerable<GameDto>>> GetAllGames()
+    {
+        var games = await _db.Games.Include(x => x.Category)
+            .OrderBy(x => x.SortOrder)
+            .ToListAsync();
+
+        return games.Select(MapGame).ToList();
+    }
+
     [HttpPost("content")]
     public async Task<ActionResult<ContentPageDto>> UpsertContent(ContentUpsertRequest request)
     {
@@ -242,6 +252,37 @@ public class AdminController : ControllerBase
             .ToListAsync();
 
         return logs;
+    }
+
+    [HttpGet("crash/summary")]
+    public async Task<ActionResult<CrashAdminSummaryDto>> GetCrashSummary()
+    {
+        var totalWagered = await _db.CrashBets.SumAsync(x => (decimal?)x.BetAmount) ?? 0m;
+        var totalPaid = await _db.CrashBets.SumAsync(x => (decimal?)x.WinAmount) ?? 0m;
+        var profit = totalWagered - totalPaid;
+
+        return new CrashAdminSummaryDto(totalWagered, totalPaid, profit);
+    }
+
+    [HttpGet("crash/rounds")]
+    public async Task<ActionResult<IEnumerable<CrashAdminRoundDto>>> GetCrashRounds()
+    {
+        var rounds = await _db.CrashGameRounds
+            .OrderByDescending(x => x.CreatedAtUtc)
+            .Take(200)
+            .Select(x => new CrashAdminRoundDto(
+                x.Id,
+                x.RoundNumber,
+                x.CrashMultiplier,
+                x.Bets.Count,
+                x.Bets.Sum(b => b.BetAmount),
+                x.Bets.Sum(b => b.WinAmount),
+                x.CreatedAtUtc,
+                x.EndedAtUtc
+            ))
+            .ToListAsync();
+
+        return rounds;
     }
 
     private static GameStatus ParseStatus(string status)

@@ -78,6 +78,13 @@ public static class SeedData
                 Description = "Color + Big/Small combined rounds. Demo stake range: Rs 10 to Rs 5,000.",
                 Sort = 1,
                 Category = "Lottery"
+            },
+            new
+            {
+                Name = "Crash Multiplier",
+                Description = "Aviator-style multiplier game. Cash out before the crash.",
+                Sort = 1,
+                Category = "Mini Games"
             }
         };
 
