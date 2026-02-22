@@ -53,7 +53,8 @@ public class GameplayController : ControllerBase
         }
 
         var result = _gameEngineService.Resolve(game.Name, request.Choice, request.CashoutAt, request.TargetMultiplier);
-        var payout = result.Won ? Math.Round(request.BetAmount * result.Multiplier, 2) : 0m;
+        var payoutRate = game.Name.Contains("lottery", StringComparison.OrdinalIgnoreCase) ? 0.96m : 1m;
+        var payout = result.Won ? Math.Round(request.BetAmount * result.Multiplier * payoutRate, 2) : 0m;
         if (payout > 0)
         {
             await _walletService.CreditAsync(userId, payout, $"{game.Name} Win", "gameplay");

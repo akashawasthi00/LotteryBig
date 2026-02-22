@@ -15,4 +15,5 @@ public record WalletWithdrawRequest(decimal Amount, string Reference);
 public record WalletAdjustRequest(Guid UserId, decimal Amount, string Reason);
 
 public record RazorpayOrderRequest(decimal Amount);
-public record RazorpayOrderResponse(string OrderId, decimal Amount, string Currency, bool DemoMode);
+public record RazorpayOrderResponse(string OrderId, decimal Amount, string Currency, bool DemoMode, string KeyId);
+public record RazorpayVerifyRequest(string OrderId, string PaymentId, string Signature);

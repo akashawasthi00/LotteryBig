@@ -31,6 +31,20 @@ public class PaymentsController : ControllerBase
         return order;
     }
 
+    [Authorize]
+    [HttpPost("razorpay/verify")]
+    public async Task<IActionResult> VerifyRazorpayPayment(RazorpayVerifyRequest request)
+    {
+        var userId = GetUserId();
+        var ok = await _razorpayService.VerifyPaymentAsync(userId, request.OrderId, request.PaymentId, request.Signature);
+        if (!ok)
+        {
+            return BadRequest("Payment verification failed.");
+        }
+
+        return Ok();
+    }
+
     [HttpPost("razorpay/webhook")]
     public async Task<IActionResult> RazorpayWebhook()
     {

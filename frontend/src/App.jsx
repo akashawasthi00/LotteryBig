@@ -4,17 +4,12 @@ import Footer from './components/Footer.jsx';
 import Home from './pages/Home.jsx';
 import Wallet from './pages/Wallet.jsx';
 import Login from './pages/Login.jsx';
-import Admin from './pages/Admin.jsx';
 import PlayGame from './pages/PlayGame.jsx';
 import Support from './pages/Support.jsx';
-import { getToken, isAdmin } from './api.js';
+import { getToken } from './api.js';
 
 function RequireAuth({ children }) {
   return getToken() ? children : <Navigate to="/login" replace />;
-}
-
-function RequireAdmin({ children }) {
-  return isAdmin() ? children : <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -30,7 +25,6 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Login />} />
           <Route path="/support" element={<Support />} />
-          <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
         </Routes>
       </main>
       <Footer />

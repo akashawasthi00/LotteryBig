@@ -28,10 +28,15 @@ export default function PlayGame() {
   const [roundResults, setRoundResults] = useState([]);
   const [showBetModal, setShowBetModal] = useState(false);
   const [pendingBet, setPendingBet] = useState(null);
+  const [presetMultiplier, setPresetMultiplier] = useState(1);
   const [liveNumber, setLiveNumber] = useState(() => Math.floor(Math.random() * 10));
   const [outcomePopup, setOutcomePopup] = useState(null);
-  const [walletAction, setWalletAction] = useState(null);
-  const [walletAmount, setWalletAmount] = useState('');
+  const [showRecharge, setShowRecharge] = useState(false);
+  const [rechargeAmount, setRechargeAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('upi');
+  const [isPaying, setIsPaying] = useState(false);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
 
   const settledPeriodRef = useRef(null);
   const previousPeriodRef = useRef(null);
@@ -245,28 +250,100 @@ export default function PlayGame() {
     setShowBetModal(true);
   };
 
-  const submitWalletAction = async () => {
-    if (!walletAction) {
-      return;
-    }
+  const handleQuickMultiplier = (nextMultiplier) => {
+    setPresetMultiplier(nextMultiplier);
+  };
 
+  const submitWithdraw = async () => {
     setError('');
-    const amount = Number(walletAmount);
+    const amount = Number(withdrawAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       setError('Enter a valid amount.');
       return;
     }
 
     try {
-      await apiFetch(`/api/wallet/${walletAction}`, {
+      await apiFetch('/api/wallet/withdraw', {
         method: 'POST',
         body: JSON.stringify({ amount, reference: `play-${gameSlug || 'game'}` })
       });
-      setWalletAction(null);
-      setWalletAmount('');
+      setShowWithdraw(false);
+      setWithdrawAmount('');
       loadWalletBalance();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const loadRazorpay = () =>
+    new Promise((resolve, reject) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => reject(new Error('Razorpay SDK failed to load.'));
+      document.body.appendChild(script);
+    });
+
+  const startRecharge = async () => {
+    setError('');
+    const amount = Number(rechargeAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a valid amount.');
+      return;
+    }
+
+    setIsPaying(true);
+    try {
+      await loadRazorpay();
+      const order = await apiFetch('/api/payments/razorpay/order', {
+        method: 'POST',
+        body: JSON.stringify({ amount })
+      });
+
+      const methodConfig = {
+        upi: paymentMethod === 'upi',
+        card: paymentMethod === 'card',
+        netbanking: paymentMethod === 'netbanking',
+        wallet: paymentMethod === 'wallet'
+      };
+
+      const options = {
+        key: order.keyId,
+        amount: Math.round(order.amount * 100),
+        currency: order.currency,
+        name: 'LotteryBig',
+        description: 'Wallet recharge',
+        order_id: order.orderId,
+        method: methodConfig,
+        handler: async (response) => {
+          try {
+            await apiFetch('/api/payments/razorpay/verify', {
+              method: 'POST',
+              body: JSON.stringify({
+                orderId: response.razorpay_order_id,
+                paymentId: response.razorpay_payment_id,
+                signature: response.razorpay_signature
+              })
+            });
+            setShowRecharge(false);
+            setRechargeAmount('');
+            loadWalletBalance();
+          } catch (err) {
+            setError(err.message);
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsPaying(false);
     }
   };
 
@@ -277,7 +354,7 @@ export default function PlayGame() {
 
       {game && (
         <div className="card play-card">
-          <div className="wallet-top-actions">
+          <div className={`wallet-top-actions ${isWingoLike ? 'wallet-top-actions-compact' : ''}`}>
             <div className="wallet-top-balance">
               <div className="wallet-amount-row">
                 <strong>{walletBalance === null ? '--' : `Rs ${walletBalance.toFixed(2)}`}</strong>
@@ -296,8 +373,8 @@ export default function PlayGame() {
               </div>
             </div>
             <div className="wallet-top-buttons">
-              <button className="wallet-action-btn wallet-withdraw-btn" onClick={() => setWalletAction('withdraw')}>Withdraw</button>
-              <button className="wallet-action-btn wallet-deposit-btn" onClick={() => setWalletAction('topup')}>Deposit</button>
+              <button className="wallet-action-btn wallet-withdraw-btn" onClick={() => setShowWithdraw(true)}>Withdraw</button>
+              <button className="wallet-action-btn wallet-deposit-btn" onClick={() => setShowRecharge(true)}>Deposit</button>
             </div>
           </div>
 
@@ -318,6 +395,8 @@ export default function PlayGame() {
               pendingBet={pendingBet}
               liveNumber={liveNumber}
               isPlaying={isPlaying}
+              selectedMultiplier={presetMultiplier}
+              onSelectMultiplier={handleQuickMultiplier}
             />
           ) : (
             <StandardGameDesk
@@ -345,34 +424,117 @@ export default function PlayGame() {
           )}
 
           {showBetModal && (
-            <BetModal
-              title={selectedMode.label}
-              choice={choice}
-              onCancel={() => setShowBetModal(false)}
-              onConfirm={handleConfirmBet}
-            />
+              <BetModal
+                title={selectedMode.label}
+                choice={choice}
+                initialMultiplier={presetMultiplier}
+                onCancel={() => setShowBetModal(false)}
+                onConfirm={handleConfirmBet}
+              />
           )}
 
-          {walletAction && (
+          {showRecharge && (
+            <div className="bet-modal-backdrop">
+              <div className="payment-modal">
+                <div className="payment-modal-head">
+                  <span className="step">2</span>
+                  <div>
+                    <h3>Payment</h3>
+                    <p>How would you like to pay?</p>
+                  </div>
+                </div>
+
+                <div className="payment-amount">
+                  <label>Amount</label>
+                  <input
+                    type="number"
+                    placeholder="Enter amount"
+                    value={rechargeAmount}
+                    onChange={(e) => setRechargeAmount(e.target.value)}
+                  />
+                </div>
+
+                <div className="payment-options">
+                  <label className="payment-option">
+                    <input
+                      type="radio"
+                      name="paymentMethodGame"
+                      checked={paymentMethod === 'upi'}
+                      onChange={() => setPaymentMethod('upi')}
+                    />
+                    <div>
+                      <span>UPI / QR</span>
+                      <small>Pay using any UPI app</small>
+                    </div>
+                  </label>
+                  <label className="payment-option">
+                    <input
+                      type="radio"
+                      name="paymentMethodGame"
+                      checked={paymentMethod === 'card'}
+                      onChange={() => setPaymentMethod('card')}
+                    />
+                    <div>
+                      <span>Credit or Debit Card</span>
+                      <small>Visa, Mastercard, Rupay</small>
+                    </div>
+                  </label>
+                  <label className="payment-option">
+                    <input
+                      type="radio"
+                      name="paymentMethodGame"
+                      checked={paymentMethod === 'netbanking'}
+                      onChange={() => setPaymentMethod('netbanking')}
+                    />
+                    <div>
+                      <span>Netbanking</span>
+                      <small>All major banks</small>
+                    </div>
+                  </label>
+                  <label className="payment-option">
+                    <input
+                      type="radio"
+                      name="paymentMethodGame"
+                      checked={paymentMethod === 'wallet'}
+                      onChange={() => setPaymentMethod('wallet')}
+                    />
+                    <div>
+                      <span>Wallet</span>
+                      <small>Paytm, PhonePe, etc.</small>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="payment-footer">
+                  <button className="btn btn-ghost" onClick={() => setShowRecharge(false)}>Cancel</button>
+                  <button className="btn btn-primary" disabled={isPaying} onClick={startRecharge}>
+                    {isPaying ? 'Processing...' : 'Continue'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showWithdraw && (
             <div className="bet-modal-backdrop">
               <div className="bet-modal">
-                <h3>{walletAction === 'topup' ? 'Deposit' : 'Withdraw'}</h3>
+                <h3>Withdraw</h3>
                 <p className="bet-selected">Game: {game.name}</p>
                 <div className="bet-section">
                   <label>Amount</label>
                   <input
                     type="number"
                     min="1"
-                    value={walletAmount}
-                    onChange={(e) => setWalletAmount(e.target.value)}
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
                     placeholder="Enter amount"
                   />
                 </div>
                 <div className="bet-bottom-bar">
                   <span>Reference: play-{gameSlug || 'game'}</span>
                   <div className="bet-actions">
-                    <button className="btn btn-ghost" onClick={() => setWalletAction(null)}>Cancel</button>
-                    <button className="btn btn-primary" onClick={submitWalletAction}>
+                    <button className="btn btn-ghost" onClick={() => setShowWithdraw(false)}>Cancel</button>
+                    <button className="btn btn-primary" onClick={submitWithdraw}>
                       Confirm
                     </button>
                   </div>
@@ -486,11 +648,18 @@ function WingoDesk({
   roundResults,
   pendingBet,
   liveNumber,
-  isPlaying
+  isPlaying,
+  selectedMultiplier,
+  onSelectMultiplier
 }) {
   const isBigSmall = gameKey === 'big small';
   const isLottery = gameKey === 'lottery';
   const wingoThemeClass = `wingo-${getGameSlug(gameKey)}`;
+
+  const handleRandomPick = () => {
+    const randomPick = Math.floor(Math.random() * 10);
+    onSelectChoice(String(randomPick));
+  };
 
   return (
     <div className={`wingo-shell ${wingoThemeClass}`}>
@@ -518,11 +687,6 @@ function WingoDesk({
         {formatCountdown(countdown)}
       </div>
 
-      <div className={`live-result num-${liveNumber} ${isPlaying ? 'spinning' : ''}`}>
-        <span>Live Result</span>
-        <strong>{liveNumber}</strong>
-      </div>
-
       {pendingBet && (
         <div className="pending-bet-banner">
           Bet placed: {pendingBet.choice} • ₹{pendingBet.totalAmount} • Settles at 00:00
@@ -531,6 +695,20 @@ function WingoDesk({
 
       {isLottery ? (
         <>
+          <div className="wingo-quick-row">
+            <button className="wingo-quick-btn random" onClick={handleRandomPick}>
+              Random
+            </button>
+            {MULTIPLIERS.map((x) => (
+              <button
+                key={`m-${x}`}
+                className={`wingo-quick-btn ${selectedMultiplier === x ? 'active' : ''}`}
+                onClick={() => onSelectMultiplier(x)}
+              >
+                X{x}
+              </button>
+            ))}
+          </div>
           <div className="wingo-colors two-cols">
             <button className={`color-btn red ${choice === 'small' ? 'active' : ''}`} onClick={() => onSelectChoice('small')}>
               Small (0-4)
@@ -541,10 +719,10 @@ function WingoDesk({
           </div>
           <div className="wingo-colors">
             <button className={`color-btn red ${choice === 'red' ? 'active' : ''}`} onClick={() => onSelectChoice('red')}>
-              Red 2x
+              Red 1.96x
             </button>
             <button className={`color-btn green ${choice === 'green' ? 'active' : ''}`} onClick={() => onSelectChoice('green')}>
-              Green 2x
+              Green 1.96x
             </button>
             <button className={`color-btn violet ${choice === 'violet' ? 'active' : ''}`} onClick={() => onSelectChoice('violet')}>
               Violet 4.5x
@@ -575,10 +753,10 @@ function WingoDesk({
         <>
           <div className="wingo-colors">
             <button className={`color-btn red ${choice === 'red' ? 'active' : ''}`} onClick={() => onSelectChoice('red')}>
-              Red 2x
+              Red 1.96x
             </button>
             <button className={`color-btn green ${choice === 'green' ? 'active' : ''}`} onClick={() => onSelectChoice('green')}>
-              Green 2x
+              Green 1.96x
             </button>
             <button className={`color-btn violet ${choice === 'violet' ? 'active' : ''}`} onClick={() => onSelectChoice('violet')}>
               Violet 4.5x
@@ -736,11 +914,15 @@ function WingoHistoryPanel({ roundResults }) {
   );
 }
 
-function BetModal({ title, choice, onCancel, onConfirm }) {
+function BetModal({ title, choice, initialMultiplier = 1, onCancel, onConfirm }) {
   const [unitAmount, setUnitAmount] = useState(10);
   const [quantity, setQuantity] = useState(1);
-  const [multiplier, setMultiplier] = useState(1);
+  const [multiplier, setMultiplier] = useState(initialMultiplier);
   const [agreed, setAgreed] = useState(true);
+
+  useEffect(() => {
+    setMultiplier(initialMultiplier);
+  }, [initialMultiplier]);
 
   const totalAmount = unitAmount * quantity * multiplier;
 
