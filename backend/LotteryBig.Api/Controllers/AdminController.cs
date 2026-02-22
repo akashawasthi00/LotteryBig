@@ -99,7 +99,7 @@ public class AdminController : ControllerBase
             }
         }
 
-        return new WalletTransactionDto(tx.Id, tx.Type.ToString(), tx.Amount, tx.Reason, tx.Reference, tx.CreatedAtUtc);
+        return new WalletTransactionDto(tx.Id, GetDisplayType(tx), tx.Amount, tx.Reason, tx.Reference, tx.CreatedAtUtc);
     }
 
     [HttpPost("games")]
@@ -270,6 +270,32 @@ public class AdminController : ControllerBase
         if (balance < 1000) return "500-999";
         if (balance < 5000) return "1000-4999";
         return "5000+";
+    }
+
+    private static string GetDisplayType(WalletTransaction tx)
+    {
+        var reason = tx.Reason ?? string.Empty;
+        if (reason.Contains("Win", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Win";
+        }
+
+        if (reason.Contains("Bet", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Loss";
+        }
+
+        if (reason.Contains("Topup", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Credit";
+        }
+
+        if (reason.Contains("Withdrawal", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Deposit";
+        }
+
+        return tx.Type.ToString();
     }
 
     private Guid? GetActorId()

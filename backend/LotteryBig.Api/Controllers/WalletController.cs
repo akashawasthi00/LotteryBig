@@ -50,7 +50,7 @@ public class WalletController : ControllerBase
             .Take(50)
             .Select(x => new WalletTransactionDto(
                 x.Id,
-                x.Type.ToString(),
+                GetDisplayType(x),
                 x.Amount,
                 x.Reason,
                 x.Reference,
@@ -72,7 +72,7 @@ public class WalletController : ControllerBase
         var tx = await _walletService.CreditAsync(userId, request.Amount, "Topup", request.Reference);
         await _auditService.LogAsync(userId, "wallet.topup", $"Topup {tx.Amount} for {userId}.");
 
-        return new WalletTransactionDto(tx.Id, tx.Type.ToString(), tx.Amount, tx.Reason, tx.Reference, tx.CreatedAtUtc);
+        return new WalletTransactionDto(tx.Id, GetDisplayType(tx), tx.Amount, tx.Reason, tx.Reference, tx.CreatedAtUtc);
     }
 
     [HttpPost("withdraw")]
@@ -91,12 +91,38 @@ public class WalletController : ControllerBase
         }
 
         await _auditService.LogAsync(userId, "wallet.withdraw", $"Withdraw {tx.Amount} for {userId}.");
-        return new WalletTransactionDto(tx.Id, tx.Type.ToString(), tx.Amount, tx.Reason, tx.Reference, tx.CreatedAtUtc);
+        return new WalletTransactionDto(tx.Id, GetDisplayType(tx), tx.Amount, tx.Reason, tx.Reference, tx.CreatedAtUtc);
     }
 
     private Guid GetUserId()
     {
         var sub = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         return Guid.Parse(sub ?? throw new InvalidOperationException("Missing user id"));
+    }
+
+    private static string GetDisplayType(WalletTransaction tx)
+    {
+        var reason = tx.Reason ?? string.Empty;
+        if (reason.Contains("Win", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Win";
+        }
+
+        if (reason.Contains("Bet", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Loss";
+        }
+
+        if (reason.Contains("Topup", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Credit";
+        }
+
+        if (reason.Contains("Withdrawal", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Deposit";
+        }
+
+        return tx.Type.ToString();
     }
 }
