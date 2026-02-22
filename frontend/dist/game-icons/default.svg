@@ -1,0 +1,5 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#24324a"/>
+  <circle cx="60" cy="60" r="28" fill="#ffd36e"/>
+  <text x="60" y="67" text-anchor="middle" fill="#1e2b40" font-size="18" font-family="Arial" font-weight="700">GAME</text>
+</svg>

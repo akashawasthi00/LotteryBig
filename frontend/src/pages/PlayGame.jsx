@@ -34,6 +34,8 @@ export default function PlayGame() {
   const [walletAmount, setWalletAmount] = useState('');
 
   const settledPeriodRef = useRef(null);
+  const previousPeriodRef = useRef(null);
+  const notifiedResultRef = useRef('');
 
   useEffect(() => {
     loadWalletBalance();
@@ -77,6 +79,7 @@ export default function PlayGame() {
   useEffect(() => {
     setPendingBet(null);
     settledPeriodRef.current = null;
+    previousPeriodRef.current = null;
   }, [selectedModeId]);
 
   useEffect(() => {
@@ -92,30 +95,40 @@ export default function PlayGame() {
   }, [countdown, isWingoLike]);
 
   useEffect(() => {
-    if (!isWingoLike || countdown !== 0) {
+    if (!isWingoLike) return;
+
+    const prev = previousPeriodRef.current;
+    previousPeriodRef.current = period;
+
+    if (prev === null || prev === period) return;
+    if (settledPeriodRef.current === prev) return;
+    settledPeriodRef.current = prev;
+
+    if (pendingBet && pendingBet.period === prev) {
+      settlePendingBet(prev);
       return;
     }
 
-    if (settledPeriodRef.current === period) {
-      return;
-    }
-
-    settledPeriodRef.current = period;
-
-    if (pendingBet) {
-      settlePendingBet(period);
-      return;
-    }
-
-    settleNoBetRound(period);
-  }, [countdown, isWingoLike, pendingBet, period]);
+    settleNoBetRound(prev);
+  }, [isWingoLike, pendingBet, period]);
 
   useEffect(() => {
     if (!result) return;
+    const resultKey = `${result.won}-${result.outcome}-${result.payout}-${result.newBalance}`;
+    if (notifiedResultRef.current === resultKey) return;
+    notifiedResultRef.current = resultKey;
+
+    const amount = result.won ? result.payout : Math.abs(result.profit ?? result.betAmount ?? 0);
     setOutcomePopup({
       won: Boolean(result.won),
-      amount: result.won ? result.payout : Math.abs(result.profit ?? result.betAmount ?? 0)
+      amount
     });
+
+    window.alert(
+      result.won
+        ? `Congratulations, you win!\nRs ${Number(amount || 0).toFixed(2)}/-`
+        : `You lost.\nRs ${Number(amount || 0).toFixed(2)}/-`
+    );
   }, [result]);
 
   const settlePendingBet = async (roundPeriod) => {
@@ -180,7 +193,7 @@ export default function PlayGame() {
     setRoundResults((prev) => [{ period: roundPeriod, number, color }, ...prev].slice(0, 10));
   };
 
-  const playRound = async (betAmount) => {
+  const playRound = async (betAmount, roundPeriod = period) => {
     setError('');
     setResult(null);
     setIsPlaying(true);
@@ -206,6 +219,14 @@ export default function PlayGame() {
           setWalletBalance(res.newBalance);
         }
 
+        if (isWingoLike) {
+          const number = parseNumberOutcome(res.outcome);
+          if (number !== null) {
+            setLiveNumber(number);
+            appendRoundResult(roundPeriod, number);
+          }
+        }
+
       }, 1200);
     } catch (err) {
       setIsPlaying(false);
@@ -215,14 +236,8 @@ export default function PlayGame() {
 
   const handleConfirmBet = async (totalAmount) => {
     setShowBetModal(false);
-
-    if (isWingoLike) {
-      setPendingBet({ totalAmount, choice, period });
-      playTone(620, 110, 'sine', 0.04);
-      return;
-    }
-
-    await playRound(totalAmount);
+    playTone(620, 110, 'sine', 0.04);
+    await playRound(totalAmount, period);
   };
 
   const handleQuickChoice = (nextChoice) => {
@@ -475,9 +490,10 @@ function WingoDesk({
 }) {
   const isBigSmall = gameKey === 'big small';
   const isLottery = gameKey === 'lottery';
+  const wingoThemeClass = `wingo-${getGameSlug(gameKey)}`;
 
   return (
-    <div className="wingo-shell">
+    <div className={`wingo-shell ${wingoThemeClass}`}>
       <div className="wingo-mode-strip">
         {modes.map((mode) => (
           <button
@@ -583,26 +599,139 @@ function WingoDesk({
         </>
       )}
 
-      <div className="wingo-prev-box">
-        <div className="wingo-prev-head">
-          <span>Previous 10</span>
-        </div>
-        <div className="wingo-prev-table">
-          <div className="wingo-prev-row header">
-            <span>Period</span>
-            <span>Result</span>
-            <span>Color</span>
+      <WingoHistoryPanel roundResults={roundResults} />
+    </div>
+  );
+}
+
+function WingoHistoryPanel({ roundResults }) {
+  const [activeTab, setActiveTab] = useState('history');
+  const chartRows = roundResults.slice(0, 20);
+  const chartStats = buildChartStats(roundResults);
+
+  return (
+    <div className="wingo-history-panel">
+      <div className="wingo-history-tabs">
+        <button type="button" className={activeTab === 'history' ? 'active' : ''} onClick={() => setActiveTab('history')}>
+          Game history
+        </button>
+        <button type="button" className={activeTab === 'chart' ? 'active' : ''} onClick={() => setActiveTab('chart')}>
+          Chart
+        </button>
+        <button type="button" className={activeTab === 'follow' ? 'active' : ''} onClick={() => setActiveTab('follow')}>
+          Follow Strategy
+        </button>
+      </div>
+
+      {activeTab === 'history' && (
+        <>
+          <div className="wingo-history-card">
+            <div className="wingo-history-head">
+              <span>Period</span>
+              <span>Number</span>
+              <span>Big Small</span>
+              <span>Color</span>
+            </div>
+
+            {roundResults.length === 0 && (
+              <div className="wingo-history-empty">No game history yet</div>
+            )}
+
+            {roundResults.map((row) => {
+              const sizeLabel = row.number >= 5 ? 'Big' : 'Small';
+              const dotColors = getHistoryDotColors(row.number);
+              return (
+                <div key={`${row.period}-${row.number}`} className="wingo-history-row">
+                  <span className="period">{row.period}</span>
+                  <span className={`number ${getHistoryNumberClass(row.number)}`}>{row.number}</span>
+                  <span className="size">{sizeLabel}</span>
+                  <span className="dot-cell">
+                    {dotColors.map((dot) => (
+                      <span key={`${row.period}-${row.number}-${dot}`} className={`dot ${dot}`} />
+                    ))}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          {roundResults.length === 0 && <div className="wingo-prev-empty">No rounds yet</div>}
-          {roundResults.map((row) => (
-            <div key={`${row.period}-${row.number}`} className="wingo-prev-row">
-              <span>{row.period}</span>
-              <span>{row.number}</span>
-              <span className={`tag ${row.color}`}>{row.color}</span>
+
+          <div className="wingo-history-footer">
+            <button type="button" className="pager-btn muted">{'<'}</button>
+            <span>1/50</span>
+            <button type="button" className="pager-btn active">{'>'}</button>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'chart' && (
+        <div className="wingo-chart-card">
+          <div className="wingo-chart-head">
+            <span>Period</span>
+            <span>Number</span>
+          </div>
+
+          <div className="wingo-chart-stats">
+            <div className="wingo-chart-stat-row">
+              <span>Statistic</span>
+              <span>(last 100 Periods)</span>
+            </div>
+            <div className="wingo-chart-stat-row">
+              <span>Winning Numbers</span>
+              <span className="num-track">
+                {Array.from({ length: 10 }).map((_, n) => (
+                  <span key={`wn-${n}`} className="num-dot red-outline">{n}</span>
+                ))}
+              </span>
+            </div>
+            <div className="wingo-chart-stat-row">
+              <span>Missing</span>
+              <span className="num-track text">
+                {chartStats.missing.map((x, i) => <span key={`ms-${i}`}>{x}</span>)}
+              </span>
+            </div>
+            <div className="wingo-chart-stat-row">
+              <span>Avg missing</span>
+              <span className="num-track text">
+                {chartStats.avgMissing.map((x, i) => <span key={`am-${i}`}>{x}</span>)}
+              </span>
+            </div>
+            <div className="wingo-chart-stat-row">
+              <span>Frequency</span>
+              <span className="num-track text">
+                {chartStats.frequency.map((x, i) => <span key={`fq-${i}`}>{x}</span>)}
+              </span>
+            </div>
+            <div className="wingo-chart-stat-row">
+              <span>Max consecutive</span>
+              <span className="num-track text">
+                {chartStats.maxConsecutive.map((x, i) => <span key={`mc-${i}`}>{x}</span>)}
+              </span>
+            </div>
+          </div>
+
+          {chartRows.map((row) => (
+            <div key={`cr-${row.period}-${row.number}`} className="wingo-chart-row">
+              <span className="period">{row.period}</span>
+              <span className="num-track">
+                {Array.from({ length: 10 }).map((_, n) => (
+                  <span
+                    key={`${row.period}-${n}`}
+                    className={`num-dot ${n === row.number ? `hit ${getHistoryNumberClass(row.number)}` : 'muted'}`}
+                  >
+                    {n}
+                  </span>
+                ))}
+              </span>
             </div>
           ))}
         </div>
-      </div>
+      )}
+
+      {activeTab === 'follow' && (
+        <div className="wingo-history-card">
+          <div className="wingo-history-empty">Follow Strategy will be available in next update.</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -698,6 +827,62 @@ function formatCountdown(totalSec) {
 function getNumberColor(number) {
   if (number === 0 || number === 5) return 'violet';
   return number % 2 === 0 ? 'red' : 'green';
+}
+
+function getHistoryDotColors(number) {
+  const colors = [];
+  colors.push(number % 2 === 0 ? 'red' : 'green');
+  if (number === 0 || number === 5) {
+    colors.push('violet');
+  }
+  return colors;
+}
+
+function getHistoryNumberClass(number) {
+  if (number === 0 || number === 5) return 'violet-mix';
+  return number % 2 === 0 ? 'red' : 'green';
+}
+
+function buildChartStats(roundResults) {
+  const data = roundResults.slice(0, 100).map((x) => x.number);
+  const numbers = Array.from({ length: 10 }, (_, i) => i);
+
+  const frequency = numbers.map((n) => data.filter((x) => x === n).length);
+
+  const missing = numbers.map((n) => {
+    const idx = data.findIndex((x) => x === n);
+    return idx === -1 ? data.length : idx;
+  });
+
+  const avgMissing = numbers.map((n) => {
+    const positions = [];
+    data.forEach((x, i) => {
+      if (x === n) positions.push(i);
+    });
+    if (positions.length < 2) return missing[n];
+    const gaps = [];
+    for (let i = 1; i < positions.length; i += 1) {
+      gaps.push(Math.max(0, positions[i] - positions[i - 1] - 1));
+    }
+    const sum = gaps.reduce((a, b) => a + b, 0);
+    return Math.round(sum / gaps.length);
+  });
+
+  const maxConsecutive = numbers.map((n) => {
+    let best = 0;
+    let current = 0;
+    data.forEach((x) => {
+      if (x === n) {
+        current += 1;
+        best = Math.max(best, current);
+      } else {
+        current = 0;
+      }
+    });
+    return best;
+  });
+
+  return { frequency, missing, avgMissing, maxConsecutive };
 }
 
 function GameStage({ keyName, choice, cashoutAt, targetMultiplier }) {
