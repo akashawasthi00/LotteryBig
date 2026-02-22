@@ -43,7 +43,7 @@ public class RazorpayService
         });
         await _db.SaveChangesAsync();
 
-        return new RazorpayOrderResponse(orderId, amount, "INR", _options.DemoMode);
+        return new RazorpayOrderResponse(orderId, amount, "INR", _options.DemoMode, _options.KeyId ?? "");
     }
 
     public async Task<bool> HandleWebhookAsync(string signature, string body)
@@ -91,6 +91,39 @@ public class RazorpayService
 
         await _walletService.CreditAsync(record.UserId, record.Amount, "Razorpay Topup", orderId);
 
+        return true;
+    }
+
+    public async Task<bool> VerifyPaymentAsync(Guid userId, string orderId, string paymentId, string signature)
+    {
+        if (string.IsNullOrWhiteSpace(orderId) || string.IsNullOrWhiteSpace(paymentId) || string.IsNullOrWhiteSpace(signature))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.KeySecret))
+        {
+            return false;
+        }
+
+        var payload = $"{orderId}|{paymentId}";
+        var expected = ComputeSignature(payload, _options.KeySecret);
+        if (!string.Equals(signature, expected, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var record = await _db.PaymentRecords.FirstOrDefaultAsync(x => x.ProviderOrderId == orderId);
+        if (record == null || record.Status == PaymentStatus.Paid)
+        {
+            return true;
+        }
+
+        record.Status = PaymentStatus.Paid;
+        record.CompletedAtUtc = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _walletService.CreditAsync(record.UserId, record.Amount, "Razorpay Topup", orderId);
         return true;
     }
 

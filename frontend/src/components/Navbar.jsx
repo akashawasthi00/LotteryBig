@@ -20,8 +20,8 @@ export default function Navbar() {
 
         <nav className="nav-links">
           <NavLink to="/">Home</NavLink>
-          <NavLink to="/">Games</NavLink>
           <NavLink to="/wallet">Wallet</NavLink>
+          <NavLink to="/support">Support</NavLink>
           {showAdmin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         {isLoggedIn ? (
